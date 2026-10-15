@@ -4,6 +4,17 @@ spring:
   mvc:
     problemdetails:
       enabled: true   # errors come back as standard JSON (RFC 9457 "problem details")
+  datasource:
+    url: jdbc:h2:file:./data/exchange;AUTO_SERVER=TRUE   # database saved in order-service/data/
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update        # create/update tables from your @Entity classes
+    open-in-view: false
+  h2:
+    console:
+      enabled: true           # browse tables at http://localhost:8080/h2-console
 
 server:
   port: 8080

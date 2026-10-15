@@ -1,0 +1,89 @@
+package com.shivam.exchange.order.account;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
+
+/**
+ * How many shares of ONE stock ONE user owns. Becomes the "positions" table:
+ *
+ *   id | owner_id | symbol | quantity | quantity_reserved
+ *    1 | shivam   | INFY   |      100 |                 0
+ *    2 | shivam   | TCS    |      100 |                 0
+ *
+ *   quantity         = total shares owned
+ *   quantityReserved = shares locked by open SELL orders (used in Step 3)
+ *   available        = quantity - quantityReserved  (what the user can still sell)
+ *
+ * The unique constraint means one user can have only ONE row per stock.
+ */
+@Entity
+@Table(
+        name = "positions",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"owner_id", "symbol"}))
+public class Position {
+
+    /** Primary key: a number the database generates automatically (1, 2, 3 ...). */
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "owner_id", nullable = false)
+    private String ownerId;
+
+    @Column(nullable = false)
+    private String symbol;
+
+    private long quantity;
+
+    private long quantityReserved;
+
+    /** Optimistic locking, same idea as in Account. */
+    @Version
+    private Long version;
+
+    /** JPA needs an empty constructor to create objects when it reads rows from the database. */
+    protected Position() {
+    }
+
+    public Position(String ownerId, String symbol, long quantity) {
+        this.ownerId = ownerId;
+        this.symbol = symbol;
+        this.quantity = quantity;
+        this.quantityReserved = 0;       // a new position has nothing locked yet
+    }
+
+    /** Shares the user can still sell = owned minus what is locked by open sell orders. */
+    public long availableQuantity() {
+        return quantity - quantityReserved;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getOwnerId() {
+        return ownerId;
+    }
+
+    public String getSymbol() {
+        return symbol;
+    }
+
+    public long getQuantity() {
+        return quantity;
+    }
+
+    public long getQuantityReserved() {
+        return quantityReserved;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+}
