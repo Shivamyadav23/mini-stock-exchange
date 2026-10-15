@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Root "aggregator" build. It does not contain code itself; it just lists the modules
+  so that one command at the root builds and tests everything:
+
+      ./mvnw test        (from the project root)
+
+  Order matters: order-service uses matching-engine, so matching-engine is built first.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.shivam.exchange</groupId>
+    <artifactId>mini-stock-exchange</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>mini-stock-exchange</name>
+
+    <modules>
+        <module>matching-engine</module>
+        <module>order-service</module>
+    </modules>
+</project>
