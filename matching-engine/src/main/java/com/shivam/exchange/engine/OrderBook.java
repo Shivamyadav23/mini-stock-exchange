@@ -32,6 +32,7 @@ public final class OrderBook {
      *
      * @return the trades that happened, in the order they happened
      */
+
     public List<Trade> process(Order incoming) {
         if (restingOrders.containsKey(incoming.id())) {
             throw new IllegalArgumentException("duplicate order id " + incoming.id());
@@ -41,28 +42,60 @@ public final class OrderBook {
         // Buyers match against sellers, sellers match against buyers.
         NavigableMap<Long, PriceLevel> opposite = incoming.side() == Side.BUY ? asks : bids;
 
-        // ============================ YOUR CODE STARTS HERE ============================
-        //
-        // STEP 1: Loop while the incoming order still has quantity left
-        //         AND the opposite side is not empty.
-        //
-        //     a) Get the best price level:   PriceLevel best = opposite.firstEntry().getValue();
-        //     b) If crosses(incoming, best.price()) is false -> stop the loop (no more matches).
-        //     c) Get the oldest waiting order at that price:   Order resting = best.peekFirst();
-        //     d) Self-trade: if resting.ownerId() equals incoming.ownerId()
-        //            -> incoming.cancel() and return trades immediately.
-        //     e) Quantity of this deal = the smaller of the two remaining quantities.
-        //     f) Add newTrade(incoming, resting, qty) to the trades list.
-        //     g) Call fill(qty) on BOTH orders, and best.reduceTotal(qty).
-        //     h) If resting is now filled -> best.pollFirst() and restingOrders.remove(resting.id()).
-        //     i) If the price level is now empty -> opposite.remove(best.price()).
-        //
-        // STEP 2: After the loop, if the incoming order still has quantity left:
-        //     - LIMIT  -> rest(incoming)       (it waits in the book)
-        //     - MARKET -> incoming.cancel()    (market orders never wait)
-        //
-        // Run `mvn test` after each step. Start by making the Level 1 tests pass.
-        // ============================= YOUR CODE ENDS HERE =============================
+        // STEP 1: Keep matching while I still need shares AND there are orders on the other side.
+        //         (Mango story: "while I still need mangoes and there are sellers")
+        while (!opposite.isEmpty() && !incoming.isFilled()) {
+
+            // a) The best price line on the other side (cheapest seller / highest buyer)
+            PriceLevel best = opposite.firstEntry().getValue();
+
+            // b) Is that price OK for me? If not, nobody further down the list is OK either -> stop.
+            if (!crosses(incoming, best.price())) {
+                break;
+            }
+
+            // c) The person who has waited longest at that price (front of the line)
+            Order resting = best.peekFirst();
+
+            // d) Never trade with yourself: cancel my order and stop.
+            if (resting.ownerId().equals(incoming.ownerId())) {
+                incoming.cancel();
+                return trades;
+            }
+
+            // e) How many shares in this deal? The smaller of "what I need" and "what they have".
+            long qty = Math.min(incoming.remainingQty(), resting.remainingQty());
+
+            // f) Write the receipt. Price = the waiting (resting) order's price.
+            trades.add(newTrade(incoming, resting, qty));
+
+            // g) Reduce both orders, and the total shown at this price line.
+            incoming.fill(qty);
+            resting.fill(qty);
+            best.reduceTotal(qty);
+
+            // h) If the waiting order is finished, remove it from the line and from the id map.
+            if (resting.isFilled()) {
+                best.pollFirst();
+                restingOrders.remove(resting.id());
+            }
+
+            // i) If nobody is left at this price, remove the whole price line.
+            if (best.isEmpty()) {
+                opposite.remove(best.price());
+            }
+        }
+
+        // STEP 2: Loop is over. If I still need shares:
+        //         LIMIT  -> wait in the book for a future match
+        //         MARKET -> cancel the rest (market orders never wait)
+        if (!incoming.isFilled()) {
+            if (incoming.type() == OrderType.LIMIT) {
+                rest(incoming);
+            } else {
+                incoming.cancel();
+            }
+        }
 
         return trades;
     }
@@ -78,9 +111,28 @@ public final class OrderBook {
      *   SELL limit  98 vs resting bid  95 -> false
      */
     private boolean crosses(Order incoming, long restingPrice) {
-        // TODO: write this (about 5 lines)
-        return false;
+        if (incoming.type() == OrderType.MARKET) {
+            return true;
+        }
+        if (incoming.side() == Side.BUY) {
+            if (incoming.price() >= restingPrice) {
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            if (incoming.price() <= restingPrice) {
+                return true;
+            } else {
+                return false;
+            }
+
+        }
     }
+    
+    
+    
+    
 
     private Trade newTrade(Order taker, Order maker, long qty) {
         long buyId = taker.side() == Side.BUY ? taker.id() : maker.id();

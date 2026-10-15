@@ -18,13 +18,14 @@ See [DESIGN.md](DESIGN.md) for the full design.
 ## Week 1: matching engine
 
 ### Requirements
-- Java 21
-- Maven 3.9+
+- Java 21 (`JAVA_HOME` set)
+- Maven is optional: the Maven Wrapper downloads Maven 3.9.9 on first run
 
 ### Run the tests
 ```bash
 cd matching-engine
-mvn test
+./mvnw test        # macOS / Linux / Git Bash
+.\mvnw.cmd test    # Windows PowerShell / cmd
 ```
 
 ### Your task
