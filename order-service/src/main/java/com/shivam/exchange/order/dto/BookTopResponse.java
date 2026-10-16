@@ -1,4 +1,4 @@
-package com.shivam.exchange.order.api.dto;
+package com.shivam.exchange.order.dto;
 
 /**
  * Best buyer and best seller for one stock ("top of book" / "L1").

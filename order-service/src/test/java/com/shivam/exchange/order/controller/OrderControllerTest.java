@@ -1,4 +1,4 @@
-package com.shivam.exchange.order.api;
+package com.shivam.exchange.order.controller;
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.DisplayName;

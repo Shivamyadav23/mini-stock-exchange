@@ -1,4 +1,4 @@
-package com.shivam.exchange.order.account;
+package com.shivam.exchange.order.entity;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;

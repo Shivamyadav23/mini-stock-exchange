@@ -1,6 +1,5 @@
-package com.shivam.exchange.order.api;
+package com.shivam.exchange.order.exception;
 
-import com.shivam.exchange.order.service.NotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;

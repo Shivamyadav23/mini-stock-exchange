@@ -1,8 +1,8 @@
-package com.shivam.exchange.order.api;
+package com.shivam.exchange.order.controller;
 
-import com.shivam.exchange.order.api.dto.BookTopResponse;
-import com.shivam.exchange.order.api.dto.OrderResponse;
-import com.shivam.exchange.order.api.dto.PlaceOrderRequest;
+import com.shivam.exchange.order.dto.BookTopResponse;
+import com.shivam.exchange.order.dto.OrderResponse;
+import com.shivam.exchange.order.dto.PlaceOrderRequest;
 import com.shivam.exchange.order.service.ExchangeService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

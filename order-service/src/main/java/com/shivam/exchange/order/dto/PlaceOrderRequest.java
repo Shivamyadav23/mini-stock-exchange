@@ -1,4 +1,4 @@
-package com.shivam.exchange.order.api.dto;
+package com.shivam.exchange.order.dto;
 
 import com.shivam.exchange.engine.OrderType;
 import com.shivam.exchange.engine.Side;
