@@ -1,6 +1,9 @@
 package com.shivam.exchange.order.controller;
 
 import com.jayway.jsonpath.JsonPath;
+import com.shivam.exchange.order.exception.AlreadyExistsException;
+import com.shivam.exchange.order.service.AccountService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +31,21 @@ class OrderControllerTest {
 
     @Autowired
     private MockMvc mvc;
+
+    @Autowired
+    private AccountService accountService;
+
+    /** Orders now need an account, so make sure every test user has one. */
+    @BeforeEach
+    void createTestAccounts() {
+        for (String user : new String[]{"rahul", "shivam", "amit", "priya"}) {
+            try {
+                accountService.openAccount(user);
+            } catch (AlreadyExistsException alreadyCreatedByAnEarlierTest) {
+                // fine: the shared test database already has this user
+            }
+        }
+    }
 
     private MvcResult placeOrder(String json) throws Exception {
         return mvc.perform(post("/api/orders").contentType(APPLICATION_JSON).content(json))
@@ -101,6 +119,15 @@ class OrderControllerTest {
                         """))
                 .andExpect(status().isBadRequest());
 
+    }
+
+    @Test
+    @DisplayName("A user without an account cannot place orders (404)")
+    void orderWithoutAccountIsNotFound() throws Exception {
+        mvc.perform(post("/api/orders").contentType(APPLICATION_JSON).content("""
+                        {"ownerId":"ghost","symbol":"INFY","side":"BUY","type":"LIMIT","price":10000,"quantity":1}
+                        """))
+                .andExpect(status().isNotFound());
     }
 
     @Test

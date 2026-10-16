@@ -36,14 +36,18 @@ public class ExchangeService {
     private final Map<String, OrderBook> books = new ConcurrentHashMap<>();
     private final Map<Long, String> symbolByOrderId = new ConcurrentHashMap<>();
     private final AtomicLong nextOrderId = new AtomicLong(1);
+    private final AccountService accountService;
 
-    public ExchangeService() {
+    // Spring injects AccountService automatically (constructor injection).
+    public ExchangeService(AccountService accountService) {
+        this.accountService = accountService;
         for (String symbol : SYMBOLS) {
             books.put(symbol, new OrderBook(symbol));
         }
     }
 
     public OrderResponse placeOrder(PlaceOrderRequest request) {
+        accountService.requireAccount(request.ownerId());   // no account -> 404, no trading
         OrderBook book = bookFor(request.symbol());
         long orderId = nextOrderId.getAndIncrement();
 

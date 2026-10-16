@@ -23,4 +23,9 @@ public class ApiExceptionHandler {
     public ProblemDetail badRequest(IllegalArgumentException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
     }
+
+    @ExceptionHandler(AlreadyExistsException.class)
+    public ProblemDetail conflict(AlreadyExistsException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    }
 }
