@@ -79,6 +79,42 @@ public class AccountService {
         }
     }
 
+    // ---------- Reservations (used by ExchangeService when orders are placed / cancelled) ----------
+    // The RULES live in Account/Position (entity). These methods only load the right row
+    // from the database and call the entity. Because the entity is "managed" inside the
+    // transaction, Hibernate saves the change automatically at commit ("dirty checking"):
+    // no explicit save() needed.
+
+    @Transactional
+    public void reserveCash(String ownerId, long amount) {
+        loadAccount(ownerId).reserveCash(amount);
+    }
+
+    @Transactional
+    public void releaseCash(String ownerId, long amount) {
+        loadAccount(ownerId).releaseCash(amount);
+    }
+
+    @Transactional
+    public void reserveShares(String ownerId, String symbol, long qty) {
+        loadPosition(ownerId, symbol).reserveShares(qty);
+    }
+
+    @Transactional
+    public void releaseShares(String ownerId, String symbol, long qty) {
+        loadPosition(ownerId, symbol).releaseShares(qty);
+    }
+
+    private Account loadAccount(String ownerId) {
+        return accountRepository.findById(ownerId)
+                .orElseThrow(() -> new NotFoundException("No account for '" + ownerId + "'"));
+    }
+
+    private Position loadPosition(String ownerId, String symbol) {
+        return positionRepository.findByOwnerIdAndSymbol(ownerId, symbol)
+                .orElseThrow(() -> new NotFoundException("'" + ownerId + "' has no " + symbol + " position"));
+    }
+
     @Transactional(readOnly = true)
     public AccountResponse getAccount(String ownerId) {
         Account account = accountRepository.findById(ownerId)
