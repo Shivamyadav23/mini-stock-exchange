@@ -95,6 +95,68 @@ public class Account {
         cashReserved -= amount;
     }
 
+    // ============================== Step 4: settlement ==============================
+
+    /**
+     * BUYER side of a trade: pay for the shares and remove the lock that was holding the money.
+     *
+     *   reservedAmount = what was LOCKED for this part of the order  (my limit price x qty)
+     *   cost           = what the trade ACTUALLY costs              (trade price   x qty)
+     *
+     * Example: Shivam bid Rs 100 for 5 shares, trade happened at Rs 98.
+     *   settleBuy(reservedAmount = 500, cost = 490)
+     *   -> cashReserved goes down by 500  (whole lock removed: 490 spent + 10 unlocked)
+     *   -> cashBalance  goes down by 490  (only the real cost is paid)
+     *
+     * Rules:
+     *   1. cost must be > 0                         -> otherwise IllegalArgumentException
+     *   2. cost must be <= reservedAmount           -> otherwise IllegalArgumentException
+     *                                                  (a buyer never pays more than they locked)
+     *   3. reservedAmount must be <= cashReserved   -> otherwise IllegalArgumentException
+     *   4. cashReserved -= reservedAmount
+     *   5. cashBalance  -= cost
+     */
+    public void settleBuy(long reservedAmount, long cost) throws IllegalArgumentException {
+      if(cost > reservedAmount) {
+          throw new IllegalArgumentException("a buyer never pays more than they locked");
+
+      }
+      if(cost<=0){
+          throw new IllegalArgumentException("cost will be positive ");
+      }
+      if (reservedAmount > cashReserved) {
+            throw new IllegalArgumentException("cannot remove more lock than is reserved");
+        }
+
+      else{
+          cashReserved=cashReserved-reservedAmount;
+          cashBalance=cashBalance-cost;
+
+
+        }
+
+    }
+
+    /**
+     * SELLER side of a trade: receive the money.
+     *
+     * Example: Rahul sold 5 shares at Rs 98 -> receiveCash(490) -> cashBalance goes up by 490
+     *
+     * Rules:
+     *   1. amount must be > 0   -> otherwise IllegalArgumentException
+     *   2. cashBalance += amount
+     */
+    public void receiveCash(long amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("amount must be positive, got " + amount);
+
+        }
+        else
+            {
+            cashBalance=cashBalance+amount;
+            }
+    }
+
     public String getOwnerId() {
         return ownerId;
     }

@@ -64,4 +64,55 @@ class PositionTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(position.getQuantityReserved()).isEqualTo(10);
     }
+
+    // ============================== Step 4: settlement ==============================
+
+    @Test
+    @DisplayName("deliverShares: sold shares leave and their lock is removed")
+    void deliverSharesRemovesSharesAndLock() {
+        position.reserveShares(5);
+
+        position.deliverShares(5);
+
+        assertThat(position.getQuantity()).isEqualTo(95);
+        assertThat(position.getQuantityReserved()).isZero();
+        assertThat(position.availableQuantity()).isEqualTo(95);
+    }
+
+    @Test
+    @DisplayName("deliverShares: partial delivery keeps the rest locked")
+    void partialDeliveryKeepsRestLocked() {
+        position.reserveShares(10);
+
+        position.deliverShares(4);
+
+        assertThat(position.getQuantity()).isEqualTo(96);
+        assertThat(position.getQuantityReserved()).isEqualTo(6);
+        assertThat(position.availableQuantity()).isEqualTo(90);
+    }
+
+    @Test
+    @DisplayName("deliverShares: only locked shares can be delivered")
+    void deliverMoreThanReservedFails() {
+        position.reserveShares(3);
+
+        assertThatThrownBy(() -> position.deliverShares(5)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(position.getQuantity()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("receiveShares: buyer's quantity goes up")
+    void receiveSharesAddsToQuantity() {
+        position.receiveShares(5);
+
+        assertThat(position.getQuantity()).isEqualTo(105);
+        assertThat(position.availableQuantity()).isEqualTo(105);
+    }
+
+    @Test
+    @DisplayName("receiveShares / deliverShares: zero or negative is rejected")
+    void zeroOrNegativeQtyFails() {
+        assertThatThrownBy(() -> position.receiveShares(0)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> position.deliverShares(-1)).isInstanceOf(IllegalArgumentException.class);
+    }
 }

@@ -105,6 +105,50 @@ public class Position {
         quantityReserved -= qty;
     }
 
+    // ============================== Step 4: settlement ==============================
+
+    /**
+     * SELLER side of a trade: the sold shares leave, and their lock is removed.
+     *
+     * Example: Rahul has 100 INFY, 5 reserved for his SELL order. 5 are sold.
+     *   deliverShares(5) -> quantity 100 -> 95, quantityReserved 5 -> 0
+     *
+     * Rules:
+     *   1. qty must be > 0                  -> otherwise IllegalArgumentException
+     *   2. qty must be <= quantityReserved  -> otherwise IllegalArgumentException
+     *                                          (you can only deliver shares that were locked for selling)
+     *   3. quantity         -= qty
+     *   4. quantityReserved -= qty
+     */
+    public void deliverShares(long qty) {
+        if (qty <= 0) {
+            throw new IllegalArgumentException("qty must be positive, got " + qty);
+        }
+        if (qty > quantityReserved) {
+            throw new IllegalArgumentException("only locked shares can be delivered");
+        }
+        quantityReserved -= qty;
+        quantity -= qty;
+
+    }
+
+    /**
+     * BUYER side of a trade: receive the shares.
+     *
+     * Example: Shivam bought 5 INFY -> receiveShares(5) -> quantity 100 -> 105
+     *
+     * Rules:
+     *   1. qty must be > 0   -> otherwise IllegalArgumentException
+     *   2. quantity += qty
+     */
+    public void receiveShares(long qty) {
+        if (qty <= 0) {
+            throw new IllegalArgumentException("qty must be positive, got " + qty);
+        }
+        quantity += qty;
+
+    }
+
     public Long getId() {
         return id;
     }

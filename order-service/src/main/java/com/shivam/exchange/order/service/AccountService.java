@@ -105,6 +105,30 @@ public class AccountService {
         loadPosition(ownerId, symbol).releaseShares(qty);
     }
 
+    /**
+     * Settle ONE trade: money goes buyer -> seller, shares go seller -> buyer.
+     *
+     * @param buyLimitPrice the BUY order's limit price: that's what was locked per share
+     * @param tradePrice    the price the trade actually happened at (<= buyLimitPrice)
+     *
+     * Money conservation: the buyer pays exactly what the seller receives (cost),
+     * so the total cash in the system never changes.
+     */
+    @Transactional
+    public void settleTrade(String buyerId, String sellerId, String symbol,
+                            long quantity, long tradePrice, long buyLimitPrice) {
+        long cost = Math.multiplyExact(tradePrice, quantity);
+        long reserved = Math.multiplyExact(buyLimitPrice, quantity);
+
+        // Buyer: pays, gets shares
+        loadAccount(buyerId).settleBuy(reserved, cost);
+        loadPosition(buyerId, symbol).receiveShares(quantity);
+
+        // Seller: delivers shares, gets paid
+        loadPosition(sellerId, symbol).deliverShares(quantity);
+        loadAccount(sellerId).receiveCash(cost);
+    }
+
     private Account loadAccount(String ownerId) {
         return accountRepository.findById(ownerId)
                 .orElseThrow(() -> new NotFoundException("No account for '" + ownerId + "'"));

@@ -28,8 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * - Reserves cash (BUY) or shares (SELL) before an order reaches the book,
  *   and releases them when the unfilled part is cancelled.
  *
- * NOTE (Step 3): money/shares reserved for the FILLED part of an order stay reserved for now.
- * Step 4 (settlement) moves them from buyer to seller when a trade happens.
+ * - Settles every trade right away: cash buyer -> seller, shares seller -> buyer (Step 4).
  *
  * THREAD SAFETY: a web server handles many requests at the same time, but OrderBook is NOT
  * thread-safe. So every access to a book is inside synchronized (book) { ... }: only one
@@ -60,7 +59,7 @@ public class ExchangeService {
      * transaction. If anything fails (e.g. not enough cash), the whole thing is rolled back.
      */
     @Transactional
-    public OrderResponse placeOrder(PlaceOrderRequest request) {git add -A
+    public OrderResponse placeOrder(PlaceOrderRequest request) {
         accountService.requireAccount(request.ownerId());   // no account -> 404, no trading
         OrderBook book = bookFor(request.symbol());
         long orderId = nextOrderId.getAndIncrement();
@@ -88,6 +87,10 @@ public class ExchangeService {
             List<Trade> trades = book.process(order);
             symbolByOrderId.put(orderId, book.symbol());
             ordersById.put(orderId, order);
+
+            for (Trade trade : trades) {
+                settle(trade, book.symbol());           // money and shares actually change hands
+            }
 
             // The engine cancels the unfilled part of a MARKET order, or the whole order
             // on self-trade. That part will never trade, so unlock it now.
@@ -123,6 +126,15 @@ public class ExchangeService {
         } else {
             accountService.reserveShares(order.ownerId(), symbol, order.quantity());
         }
+    }
+
+    /** Settlement of one trade. The BUY order's limit price tells how much was locked per share. */
+    private void settle(Trade trade, String symbol) {
+        Order buyOrder = ordersById.get(trade.buyOrderId());
+        Order sellOrder = ordersById.get(trade.sellOrderId());
+        accountService.settleTrade(
+                buyOrder.ownerId(), sellOrder.ownerId(), symbol,
+                trade.quantity(), trade.price(), buyOrder.price());
     }
 
     /** Unlock what is still reserved for the part of the order that did not trade. */
