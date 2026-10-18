@@ -24,6 +24,11 @@ public class ApiExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
+    @ExceptionHandler(InsufficientBalanceException.class)
+    public ProblemDetail insufficientBalance(InsufficientBalanceException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
     @ExceptionHandler(AlreadyExistsException.class)
     public ProblemDetail conflict(AlreadyExistsException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());

@@ -1,5 +1,6 @@
 package com.shivam.exchange.order.entity;
 
+import com.shivam.exchange.order.exception.InsufficientBalanceException;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -48,6 +49,50 @@ public class Account {
     /** Money the user can still spend = balance minus what is locked by open buy orders. */
     public long availableCash() {
         return cashBalance - cashReserved;
+    }
+
+    /**
+     * Lock money for a new BUY order, so it can't be spent twice.
+     *
+     * Example: balance 1,00,000, reserved 0, reserveCash(10,000)
+     *          -> reserved becomes 10,000, available becomes 90,000
+     *
+     * Rules:
+     *   1. amount must be greater than 0          -> otherwise throw IllegalArgumentException
+     *   2. amount must be <= availableCash()      -> otherwise throw InsufficientBalanceException
+     *   3. if both are OK                         -> add amount to cashReserved
+     */
+    public void reserveCash(long amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("amount must be positive, got " + amount);
+        }
+        if (amount > availableCash()) {
+            throw new InsufficientBalanceException(
+                    "Not enough cash: need " + amount + ", available " + availableCash());
+        }
+        cashReserved += amount;
+    }
+
+    /**
+     * Unlock money when a BUY order is cancelled (or after it is filled, in Step 4).
+     *
+     * Example: reserved 10,000, releaseCash(10,000) -> reserved becomes 0
+     *
+     * Rules:
+     *   1. amount must be greater than 0          -> otherwise throw IllegalArgumentException
+     *   2. amount must be <= cashReserved         -> otherwise throw IllegalArgumentException
+     *                                                (you can't release more than is locked)
+     *   3. if both are OK                         -> subtract amount from cashReserved
+     */
+    public void releaseCash(long amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("amount must be positive, got " + amount);
+        }
+        if (amount > cashReserved) {
+            throw new IllegalArgumentException(
+                    "Cannot release " + amount + ": only " + cashReserved + " is reserved");
+        }
+        cashReserved -= amount;
     }
 
     public String getOwnerId() {
