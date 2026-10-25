@@ -1,6 +1,6 @@
 # Mini Stock Exchange
 
-A simplified stock exchange with a price-time priority **order matching engine** and a **paper-trading platform**, built in Java and deployed with a full DevOps stack.
+A simplified stock exchange with a price-time priority **order matching engine** and a **paper-trading platform**, built in Java / Spring Boot and deployed with a full DevOps stack.
 
 See [DESIGN.md](DESIGN.md) for the full design.
 
@@ -8,18 +8,29 @@ See [DESIGN.md](DESIGN.md) for the full design.
 
 | Week | Module | Status |
 |---|---|---|
-| 1 | `matching-engine` (pure Java) | ✅ Done (13 tests) |
-| 2 | `order-service`: Spring Boot API, accounts, settlement | 🚧 In progress (Day 1: REST API) |
-| 3 | Market data, WebSocket, market-maker bot | ⏳ |
+| 1 | `matching-engine`: price-time priority matching (pure Java) | ✅ Done |
+| 2 | `order-service`: REST API, accounts, reservations, settlement (Spring Boot + JPA) | ✅ Done |
+| 3 | Market data, WebSocket, market-maker bot, JWT login | ⏳ |
 | 4–5 | Split into services over Kafka | ⏳ |
-| 6–8 | Docker, Kubernetes, Helm, Terraform (AWS EKS) | ⏳ |
-| 9–10 | GitHub Actions, ArgoCD, Prometheus, Grafana | ⏳ |
+| 6–8 | Docker, PostgreSQL, Kubernetes, Helm, Terraform (AWS EKS) | ⏳ |
+| 9–10 | GitHub Actions CD, ArgoCD, Prometheus, Grafana | ⏳ |
+
+**60 tests** across both modules (13 engine, 47 order-service).
+
+## Features
+
+- **Matching engine**: LIMIT and MARKET orders, price-time priority, partial fills, maker price, self-trade prevention, cancel
+- **Accounts**: every new user gets ₹1,00,000 paper cash and 100 shares of each stock
+- **Reservations**: placing an order locks the cash (BUY) or shares (SELL), so they can't be spent twice; cancelling unlocks them
+- **Settlement**: every trade moves cash buyer → seller and shares seller → buyer in one database transaction; total cash in the system never changes
+- **Safe money**: all amounts are `long` paise (₹100.50 = `10050`), overflow-checked; optimistic locking (`@Version`) on accounts and positions
+- **Clean errors**: RFC 9457 problem-details JSON (400 / 404 / 409)
 
 ## Requirements
 - Java 21 (`JAVA_HOME` set)
 - Maven is optional: the Maven Wrapper downloads Maven 3.9.9 on first run
 
-## Build and test everything
+## Build and test
 From the project root:
 ```bash
 ./mvnw test        # macOS / Linux / Git Bash
@@ -28,12 +39,17 @@ From the project root:
 
 ## Run the API
 ```bash
-./mvnw install -DskipTests          # build the engine jar so order-service can use it
+./mvnw install -DskipTests                 # build the engine jar that order-service depends on
 ./mvnw -pl order-service spring-boot:run
 ```
-Or in IntelliJ: open `OrderServiceApplication` and click the green ▶ button.
+Or in IntelliJ: open `OrderServiceApplication` and click ▶.
 
-Health check: http://localhost:8080/actuator/health
+| URL | What |
+|---|---|
+| http://localhost:8080/actuator/health | Health check |
+| http://localhost:8080/h2-console | Browse the database (JDBC URL `jdbc:h2:file:./data/exchange`, user `sa`, empty password) |
+
+The H2 database file lives in `data/` relative to where the app is started (git-ignored). Tests use a separate in-memory database.
 
 ## API
 
@@ -41,40 +57,52 @@ Prices are in **paise** (`10000` = ₹100.00). Symbols: `INFY`, `TCS`, `RELIANCE
 
 | Method | Path | What it does |
 |---|---|---|
-| POST | `/api/orders` | Place an order |
-| DELETE | `/api/orders/{orderId}` | Cancel an open order |
+| POST | `/api/accounts` | Open an account `{"ownerId":"shivam"}` → 201 (409 if it exists) |
+| GET | `/api/accounts/{ownerId}` | Cash and holdings |
+| POST | `/api/orders` | Place an order (reserves cash/shares, matches, settles) → 201 |
+| DELETE | `/api/orders/{orderId}` | Cancel an open order and release its reservation |
 | GET | `/api/market/{symbol}/top` | Best bid and best ask |
-| GET | `/api/market/symbols` | List of tradable stocks |
+| GET | `/api/market/symbols` | Tradable stocks |
 
 ### Try it (Git Bash)
 ```bash
-# Rahul sells 5 INFY at Rs 98
+# 1. Open two accounts
+curl -s -X POST localhost:8080/api/accounts -H "Content-Type: application/json" -d '{"ownerId":"rahul"}'
+curl -s -X POST localhost:8080/api/accounts -H "Content-Type: application/json" -d '{"ownerId":"shivam"}'
+
+# 2. Rahul sells 5 INFY at ₹98 (5 shares are locked)
 curl -s -X POST localhost:8080/api/orders -H "Content-Type: application/json" \
   -d '{"ownerId":"rahul","symbol":"INFY","side":"SELL","type":"LIMIT","price":9800,"quantity":5}'
 
-# Shivam buys 5 INFY at up to Rs 100 -> trade at Rs 98
+# 3. Shivam buys 5 INFY at up to ₹100 → trade at ₹98 (the resting order's price)
 curl -s -X POST localhost:8080/api/orders -H "Content-Type: application/json" \
   -d '{"ownerId":"shivam","symbol":"INFY","side":"BUY","type":"LIMIT","price":10000,"quantity":5}'
 
-# Best bid / ask
-curl -s localhost:8080/api/market/INFY/top
+# 4. ₹490 moved from Shivam to Rahul, 5 INFY moved from Rahul to Shivam
+curl -s localhost:8080/api/accounts/shivam    # cash 9951000, INFY 105
+curl -s localhost:8080/api/accounts/rahul     # cash 10049000, INFY 95
 ```
 
 ## Code map
 
-### `matching-engine` (Week 1)
+### `matching-engine` (`com.shivam.exchange.engine`)
 | File | What it is |
 |---|---|
-| `Order` | One order. Prices are `long` paise (₹100.50 = `10050`) |
-| `Trade` | One deal between a buyer and a seller |
-| `PriceLevel` | All orders waiting at one price, in arrival order |
-| `OrderBook` | Bids and asks for one stock, plus the matching logic |
+| `Order` | One order: side, type, price (paise), quantity, remaining, status |
+| `Trade` | One deal: buyer, seller, maker, taker, price (maker's), quantity |
+| `PriceLevel` | All orders waiting at one price, first in first out |
+| `OrderBook` | Bids and asks (`TreeMap`, best price first) plus the matching logic |
 
-### `order-service` (Week 2)
-| File | What it is |
-|---|---|
-| `OrderServiceApplication` | Starts the Spring Boot app |
-| `api/OrderController` | HTTP endpoints (thin: read request, call service) |
-| `api/ApiExceptionHandler` | Turns exceptions into 400 / 404 JSON errors |
-| `api/dto/*` | Request and response JSON shapes |
-| `service/ExchangeService` | One `OrderBook` per stock, order ids, thread safety |
+### `order-service` (`com.shivam.exchange.order`)
+| Package | Files | What it does |
+|---|---|---|
+| `controller` | `OrderController`, `AccountController` | HTTP endpoints, thin: validate, call service, return |
+| `service` | `ExchangeService` | One `OrderBook` per stock, order ids, thread safety, reserve → match → settle |
+| | `AccountService` | Opens accounts, loads rows, calls entity rules, settles trades (`@Transactional`) |
+| `entity` | `Account`, `Position` | Database tables + money/share rules (reserve, release, settle) |
+| `repository` | `AccountRepository`, `PositionRepository` | Spring Data JPA, no SQL written by hand |
+| `dto` | `*Request`, `*Response` | JSON shapes in and out |
+| `exception` | `ApiExceptionHandler` + 3 exceptions | Errors → 400 / 404 / 409 problem details |
+
+## Tech
+Java 21 · Spring Boot 3.5 · Spring Data JPA / Hibernate · H2 · JUnit 5 · AssertJ · Maven (multi-module) · GitHub Actions
