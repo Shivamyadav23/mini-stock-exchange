@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Maven settings used ONLY by Jenkins (./mvnw -s ci/settings.xml ...). Local builds don't use it.
+
+  - mirror: every dependency download goes through Nexus "maven-public" (a cache of Maven Central),
+    so Jenkins builds are faster and don't depend on the internet every time.
+  - servers: login for Nexus. Values come from environment variables that Jenkins sets from the
+    "nexus-creds" credential. No password is ever stored in git.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+
+    <servers>
+        <server>
+            <id>nexus-public</id>
+            <username>${env.NEXUS_USER}</username>
+            <password>${env.NEXUS_PASS}</password>
+        </server>
+        <server>
+            <id>nexus-snapshots</id>
+            <username>${env.NEXUS_USER}</username>
+            <password>${env.NEXUS_PASS}</password>
+        </server>
+        <server>
+            <id>nexus-releases</id>
+            <username>${env.NEXUS_USER}</username>
+            <password>${env.NEXUS_PASS}</password>
+        </server>
+    </servers>
+
+    <mirrors>
+        <mirror>
+            <id>nexus-public</id>
+            <mirrorOf>*</mirrorOf>
+            <url>${env.NEXUS_URL}/repository/maven-public/</url>
+        </mirror>
+    </mirrors>
+</settings>

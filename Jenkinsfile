@@ -1,26 +1,33 @@
 // Jenkins pipeline for mini-stock-exchange.
-// Job type: Multibranch Pipeline → every branch (develop, main, feature/*) with this file gets its own pipeline.
+// Job type: Multibranch Pipeline → every branch with this file gets its own pipeline.
 //
 // Stages:
-//   1. Checkout      - get the code for this branch
-//   2. Build & Test  - compile both modules and run all 60 tests (engine first, then order-service)
-//   3. Package       - keep the runnable order-service jar as a build artifact
+//   1. Checkout          - get the code for this branch
+//   2. Build & Test      - compile both modules, run all 60 tests (dependencies come through Nexus)
+//   3. Package           - keep the runnable order-service jar as a Jenkins artifact
+//   4. Publish to Nexus  - develop/main only: upload the jars to Nexus (SNAPSHOT → maven-snapshots)
 //
-// Next steps (later): Docker image build + push, deploy.
+// Needs in Jenkins: a "Username with password" credential with id "nexus-creds" (Nexus user jenkins-ci).
+// Jenkins and Nexus run as Docker containers on the same network "cicd", so Nexus is http://nexus:8081.
 
 pipeline {
     agent any
 
     options {
-        timestamps()                                    // time on every log line
-        timeout(time: 20, unit: 'MINUTES')              // kill a stuck build
-        buildDiscarder(logRotator(numToKeepStr: '10'))  // keep only the last 10 builds
-        disableConcurrentBuilds()                       // one build per branch at a time
+        timestamps()
+        timeout(time: 20, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
     }
 
     triggers {
-        // Jenkins on a laptop can't receive GitHub webhooks, so check GitHub for new commits every 5 minutes.
+        // Jenkins on a laptop can't receive GitHub webhooks, so check for new commits every 5 minutes.
         pollSCM('H/5 * * * *')
+    }
+
+    environment {
+        NEXUS_URL = 'http://nexus:8081'
+        MVN       = './mvnw -B -ntp -s ci/settings.xml'
     }
 
     stages {
@@ -28,17 +35,19 @@ pipeline {
             steps {
                 checkout scm
                 sh 'git log -1 --oneline'
+                sh 'chmod +x mvnw'                      // Windows commits can lose the executable bit
             }
         }
 
         stage('Build & Test') {
             steps {
-                sh 'chmod +x mvnw'                      // Windows commits lose the executable bit
-                sh './mvnw -B -ntp clean verify'        // -B batch mode, -ntp no download progress spam
+                withCredentials([usernamePassword(credentialsId: 'nexus-creds',
+                        usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    sh "${MVN} clean verify"
+                }
             }
             post {
                 always {
-                    // Test results graph + per-test pass/fail in the Jenkins UI
                     junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
                 }
             }
@@ -49,10 +58,26 @@ pipeline {
                 archiveArtifacts artifacts: 'order-service/target/order-service-*.jar', fingerprint: true
             }
         }
+
+        stage('Publish to Nexus') {
+            when { anyOf { branch 'develop'; branch 'main' } }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'nexus-creds',
+                        usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    // Tests already passed above, so skip them here.
+                    // SNAPSHOT versions go to maven-snapshots, release versions to maven-releases.
+                    sh """
+                        ${MVN} deploy -DskipTests \
+                          -DaltSnapshotDeploymentRepository=nexus-snapshots::${NEXUS_URL}/repository/maven-snapshots/ \
+                          -DaltReleaseDeploymentRepository=nexus-releases::${NEXUS_URL}/repository/maven-releases/
+                    """
+                }
+            }
+        }
     }
 
     post {
-        success { echo "✅ ${env.BRANCH_NAME} #${env.BUILD_NUMBER}: build and all tests passed" }
+        success { echo "✅ ${env.BRANCH_NAME} #${env.BUILD_NUMBER}: build, tests and publish passed" }
         failure { echo "❌ ${env.BRANCH_NAME} #${env.BUILD_NUMBER}: failed, check the stage logs and test report" }
     }
 }
