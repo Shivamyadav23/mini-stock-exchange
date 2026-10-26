@@ -1,5 +1,5 @@
 // Jenkins pipeline for mini-stock-exchange.
-// Job type: Multibranch Pipeline → every branch with this file gets its own pipeline.
+// Job type: normal Pipeline ("Pipeline script from SCM") or Multibranch Pipeline, both work.
 //
 // Stages:
 //   1. Checkout          - get the code for this branch
@@ -60,7 +60,10 @@ pipeline {
         }
 
         stage('Publish to Nexus') {
-            when { anyOf { branch 'develop'; branch 'main' } }
+            // Works for both job types:
+            //   Multibranch Pipeline → BRANCH_NAME = "develop"
+            //   normal Pipeline      → GIT_BRANCH  = "origin/develop"
+            when { expression { (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '') ==~ /(origin\/)?(develop|main)/ } }
             steps {
                 withCredentials([usernamePassword(credentialsId: 'nexus-creds',
                         usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
@@ -77,7 +80,7 @@ pipeline {
     }
 
     post {
-        success { echo "✅ ${env.BRANCH_NAME} #${env.BUILD_NUMBER}: build, tests and publish passed" }
-        failure { echo "❌ ${env.BRANCH_NAME} #${env.BUILD_NUMBER}: failed, check the stage logs and test report" }
+        success { echo "✅ ${env.BRANCH_NAME ?: env.GIT_BRANCH} #${env.BUILD_NUMBER}: build, tests and publish passed" }
+        failure { echo "❌ ${env.BRANCH_NAME ?: env.GIT_BRANCH} #${env.BUILD_NUMBER}: failed, check the stage logs and test report" }
     }
 }
